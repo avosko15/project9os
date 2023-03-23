@@ -55,6 +55,46 @@ int allocate_page()
     }
     return 0xff;
 }   
+
+void deallocate_page(int p) {
+    mem[p] = 0;
+}
+
+void kill_process(int p) {
+    int page_table_page = get_page_table(p);
+    int* page_table = (int*) (mem + (page_table_page * PAGE_SIZE));
+
+    for (int i = 0; i < PAGE_COUNT; i++) {
+        if (page_table[i] != 0) {
+            deallocate_page(page_table[i]);
+        }
+    }
+    deallocate_page(page_table_page);
+}
+
+int get_physical_address(int proc_num, int virtual_addr) {
+
+    int virtual_page = virtual_addr >> 8;
+    int offset = virtual_addr & 255;
+    int page_table = mem[64 + proc_num];
+    return (mem[page_table * PAGE_SIZE + virtual_page] << 8) | offset;
+}
+
+void store_value(int proc_num, int virt_addr, int value) {
+    int phys_addr = get_physical_address(proc_num, virt_addr);
+    mem[phys_addr] = value;
+
+    printf("Store proc %d: %d => %d, value=%d\n", proc_num, virt_addr, phys_addr, value);
+}
+
+void load_value(int proc_num, int virt_addr) {
+    int phys_addr = get_physical_address(proc_num, virt_addr);
+    int value = mem[phys_addr];
+
+    printf("Load proc %d: %d => %d, value=%d\n", proc_num, virt_addr, phys_addr, value);
+}
+
+
 // This includes the new process page table and page_count data pages.
 //
 void new_process(int proc_num, int page_count)
@@ -117,15 +157,9 @@ void print_page_table(int proc_num)
 //
 // Main -- process command line
 //
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     assert(PAGE_COUNT * PAGE_SIZE == MEM_SIZE);
 
-    if (argc == 1) {
-        fprintf(stderr, "usage: ptsim commands\n");
-        return 1;
-    }
-    
     initialize_mem();
 
     for (int i = 1; i < argc; i++) {
@@ -137,8 +171,24 @@ int main(int argc, char *argv[])
             print_page_table(proc_num);
         }
         else if (strcmp(argv[i], "np") == 0) {
-            new_process(atoi(argv[i + 1]), atoi(argv[i + 2]));
+            new_process(atoi(argv[i+1]), atoi(argv[i+2]));
+            i += 2;
         }
-    }
+        else if (strcmp(argv[i], "kp") == 0) {
+            kill_process(atoi(argv[++i]));
+        }
+        else if (strcmp(argv[i], "sb") == 0) {
+            int proc_num = atoi(argv[++i]);
+            int virt_addr = atoi(argv[++i]);
+            int value = atoi(argv[++i]);
+            store_value(proc_num, virt_addr, value);
+        }
+        else if (strcmp(argv[i], "lb") == 0) {
+            int proc_num = atoi(argv[++i]);
+            int virt_addr = atoi(argv[++i]);
+            load_value(proc_num, virt_addr);
+        }      
+    } 
+
     return 0;
 }
